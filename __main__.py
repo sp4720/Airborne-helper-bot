@@ -1,4 +1,5 @@
 from lib2to3.fixes.fix_metaclass import find_metas
+from operator import truediv
 
 import discord
 from discord.ext import commands
@@ -9,20 +10,55 @@ from datetime import datetime, timedelta
 import asyncio
 import re
 
-
 intents = discord.Intents.default()
 intents.message_content = True
 bot = commands.Bot(command_prefix = "/", intents = intents)
+tree = bot.tree
+
+#全域資料儲存
+user_data = {
+    "coor_info": {
+        "coor_tar":[],
+        "coor_step":[],
+        "coor_steptype":[]
+    },
+
+    "sametime_info": {
+        "deptime":[],
+        "arrivetime":[],
+        "fspd":[]
+    },
+
+    "sameplace_info": {
+        "coor_dep":[],
+        "arrivetime":[],
+        "fspd":[]
+    },
+
+    "status":{
+        "coorinfo_done": False,
+        "timeplace_info": False,
+        "fmode": "default",
+        "result": "result"
+    }
+}
 
 @bot.event
 async def on_ready():
+    await bot.wait_until_ready()
+    try:
+        synced = await bot.tree.sync()
+        print(f"已同步{len(synced)}個指令")
+    except Exception as e:
+        print(f"同步指令失敗:{e}")
     print(f"目前登入身分 --> {bot.user}")
     print("指揮官，空降行動開始，祝您武運昌隆!")
 
 
 #目標地點/空降地點表單
 class GetcoorinfoModal(Modal):
-    def __init__(self):
+    def __init__(self, user_id):
+        self.user_id = user_id
         super().__init__(title = "請輸入空降目標座標 、跳板目標座標以及跳板類型：")
         self.coor_target = TextInput(
             label = "請輸入空降目標座標:",
@@ -52,7 +88,7 @@ class GetcoorinfoModal(Modal):
 
     async def on_submit(self, interaction: discord.Interaction):
         try:
-
+            user_id = interaction.user.id
             xtar_str, ytar_str = re.split(r"[,\s]+", self.coor_target.value)
             xtar = int(xtar_str.strip())
             ytar = int(ytar_str.strip())
@@ -69,6 +105,11 @@ class GetcoorinfoModal(Modal):
             else:
                 step_type_str = "你應該輸入錯囉"
 
+            user_data[user_id]["coor_info"]["coor_tar"].append((xtar, ytar))
+            user_data[user_id]["coor_info"]["coor_step"].append((xstp, ystp))
+            user_data[user_id]["coor_info"]["coor_steptype"].append(step_type)
+            user_data[user_id]["status"]["coorinfo_done"] = True
+
             await interaction.response.send_message(
                 f"座標獲取成功!"
                 f"空降目標座標:({xtar}, {ytar})\n"
@@ -76,6 +117,14 @@ class GetcoorinfoModal(Modal):
                 f"跳板類型為{step_type_str}",
                 ephemeral = True
             )
+            #雙表單完成檢查
+            if user_data[user_id]["status"]["coorinfo_done"] and (user_data[user_id]["status"]["timeplace_info_done"]):
+                start_button = Button(label = "開始計算", style = discord.ButtonStyle.green, custom_id = "start_calc")
+                view3 = View()
+                view3.add_item(start_button)
+                await interaction.followup.send_message("資料輸入完成!", view = view3, ephmeral = True)
+            else:
+                interaction.followup.send_message("請繼續填寫同時/同地起飛資訊!", ephemeral = True)
 
         except Exception as e:
             await interaction.response.send_message(
@@ -113,11 +162,51 @@ class SametimeinfoModal(Modal):
         self.add_item(self.arrivetime)
         self.add_item(self.fspd)
 
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            user_id = interaction.user.id
+
+            deptime_str = self.deptime.value
+            deptime = datetime.strptime(deptime_str, "%H:%M")
+
+            arrivetime_str = self.arrivetime.value
+            arrivetime = datetime.strptime(deptime_str, "%H:%M")
+
+            fspd = int(self.fspd.value.strip())
+
+            user_data[user_id]["sametime_info"]["deptime"].append(deptime)
+            user_data[user_id]["sametime_info"]["arrivetime"].append(arrivetime)
+            user_data[user_id]["sametime_info"]["fspd"].append(fspd)
+            user_data[user_id]["status"]["timeplaceinfo_done"] = True
+            user_data[user_id]["status"]["fmode"] = "sametime"
+
+            await interaction.response.send_message(
+                f"資訊獲取獲取成功!\n"
+                f"預計出發時間為:({deptime.strftime(%H:%M)})\n"
+                f"抵達目標時間為:({arrivetime.strftime(%H:%M)})\n"
+                f"艦隊曲率航速為:{fspd}",
+                ephemeral=True
+            )
+            #雙表單完成檢查
+            if user_data[user_id]["status"]["coorinfo_done"] and (user_data[user_id]["status"]["timeplace_info_done"]):
+                start_button = Button(label = "開始計算", style = discord.ButtonStyle.green, custom_id = "start_calc")
+                view3 = View()
+                view3.add_item(start_button)
+                await interaction.followup.send_message("資料輸入完成!", view = view3, ephmeral = True)
+            else:
+                interaction.followup.send_message("請繼續填寫座標資訊!", ephemeral = True)
+
+        except Exception as e:
+            await interaction.response.send_message(
+                f"資料格式錯誤，請確認時間格式為HH:MM(英文逗號)，航速為整數。\n錯誤訊息:{str(e)}",
+                ephemeral=True
+            )
+
 #同地出發資訊表單
 class SameplaceinfoModal(Modal):
     def __init__(self):
         super().__init__(title = "請輸入出發地點、到達時間以及曲率航速：")
-        self.deptime = TextInput(
+        self.coor_dep = TextInput(
             label = "請輸入預計出發的地點:",
             placeholder = "X, Y",
             style = discord.TextStyle.short,
@@ -138,36 +227,324 @@ class SameplaceinfoModal(Modal):
             required = True
         )
 
-        self.add_item(self.deptime)
+        self.add_item(self.coor_dep)
         self.add_item(self.arrivetime)
         self.add_item(self.fspd)
 
+    async def on_submit(self, interaction: discord.Interaction):
+        try:
+            user_id = interaction.user.id
+            xcoor_dep_str, ycoor_dep_str = re.split(r"[,\s]+", self.coor_target.value)
+            xdep = int(xcoor_dep_str.strip())
+            ydep = int(ycoor_dep_str.strip())
+
+            arrivetime_str = self.arrivetime.value
+            arrivetime = datetime.strptime(deptime_str, "%H:%M")
+
+            fspd = int(self.fspd.value.strip())
+
+            user_data[user_id]["sameplace_info"]["coor_dep"].append(xdep, ydep)
+            user_data[user_id]["sameplace_info"]["arrivetime"].append(arrivetime)
+            user_data[user_id]["sameplace_info"]["fspd"].append(fspd)
+            user_data[user_id]["status"]["timeplaceinfo_done"] = True
+            user_data[user_id]["status"]["fmode"] = "sameplace"
+
+            await interaction.response.send_message(
+                f"資訊獲取獲取成功!"
+                f"預計出發座標為:({xdep}, {ydep})\n"
+                f"出發時間為:({arrivetime.strftime(%H:%M)})\n"
+                f"艦隊曲率航速為:{fspd}",
+                ephemeral=True
+            )
+            #雙表單完成檢查
+            if user_data[user_id]["status"]["coorinfo_done"] and (user_date[user_id]["status"]["timeplace_info_done"]):
+                start_button = Button(label = "開始計算", style = discord.ButtonStyle.green, custom_id = "start_calc")
+                view3 = View()
+                view3.add_item(start_button)
+                await interaction.followup.send_message("資料輸入完成!", view = view3, ephmeral = True)
+            else:
+                interaction.followup.send_message("請繼續填寫座標資訊!", ephemeral = True)
+
+        except Exception as e:
+            await interaction.response.send_message(
+                f"資料格式錯誤，請確認時間格式為HH:MM(英文逗號)，航速為整數。\n錯誤訊息:{str(e)}",
+                ephemeral=True
+            )
+
+
+#計算過程
+
+#取得跳板角位置
+def exactcoor(xtar, ytar, xstp, ystp, step_type):
+    xcor = int(xstp % 10)
+    ycor = int(ystp % 10)
+    if step_type == 1:
+        coords = {
+            "xtl": int(xstp - xcor),
+            "ytl": int(ystp + 10 - ycor),
+            "xtr": int(xstp + 10 - xcor),
+            "ytr": int(ystp + 10 - ycor),
+            "xbl": int(xstp - xcor),
+            "ybl": int(ystp - ycor),
+            "xbr": int(xstp + 10 - xcor),
+            "ybr": int(ystp - ycor)
+        }
+    else:
+        coords = {
+            "xtl": int(xstp - 10),
+            "ytl": int(ystp + 10),
+            "xtr": int(xstp + 10),
+            "ytr": int(ystp + 10),
+            "xbl": int(xstp - 10),
+            "ybl": int(ystp - 10),
+            "xbr": int(xstp + 10),
+            "ybr": int(ystp - 10)
+        }
+    dist = {
+        "dtl": float(math.sqrt((coords["xtl"] - xtar) ** 2 + (coords["ytl"] - ytar) ** 2)),
+        "dtr": float(math.sqrt((coords["xtr"] - xtar) ** 2 + (coords["ytr"] - ytar) ** 2)),
+        "dbl": float(math.sqrt((coords["xbl"] - xtar) ** 2 + (coords["ybl"] - ytar) ** 2)),
+        "dbr": float(math.sqrt((coords["xbr"] - xtar) ** 2 + (coords["ybr"] - ytar) ** 2))
+    }
+
+    result = min(dist, key=dist.get)
+    if result == "dtl":
+        return coords["xtl"], coords["ytl"]
+    elif result == "dtr":
+        return coords["xtr"], coords["ytr"]
+    elif result == "dbl":
+        return coords["xbl"], coords["ybl"]
+    else:
+        return coords["xbr"], coords["ybr"]
+
+#計算跳板與空降目標連線公式
+def get_line_info(xtar, ytar, xexact, yexact):
+    if xtar == xexact:
+        c = round(xtar)
+        return 1, 0, c
+    else:
+        m_raw = float((yexact - ytar) / (xexact - xtar))
+        b_raw = float(ytar - m_raw * xtar)
+        m = round(m_raw, 5)
+        b = round(b_raw, 5)
+        return 2, m, b
+
+#計算同時起飛
+def fmode1(deptime, arrivetime, fspd, xstp, ystp, lne, slp, inter, x1, y1, xexact, yexact, tolerance=1e-6):
+    time = arrivetime - deptime
+    if time.total_seconds() < 0:
+        time += timedelta(seconds=86400)
+    dist = round((0.0001 * fspd) * time.total_seconds(), 5)
+    # 得出半徑dist 開始求交點
+    if lne == 1:
+        xs1 = xstp
+        ys1 = round(ystp + dist)
+        xs2 = xstp
+        ys2 = round(ystp - dist)
+    elif lne == 2:
+        A = 1 + slp ** 2
+        B = 2 * (slp * (inter - ystp) - xstp)
+        C = (inter - ystp) ** 2 + xstp ** 2 - dist ** 2
+        discriminant = B ** 2 - 4 * A * C
+        sqrt_D = math.sqrt(discriminant)
+        xs1 = (-B + sqrt_D) / (2 * A)
+        xs2 = (-B - sqrt_D) / (2 * A)
+        ys1 = slp * xs1 + inter
+        ys2 = slp * xs2 + inter
+
+        # print(dist, time.total_seconds(),xexact, yexact, xs1, ys1, xs2, ys2)
+    # 得到兩個座標 用向量求何者為同向
+    vec = {
+        "v0": (x1 - xexact, y1 - yexact),
+        "v1": (xs1 - x1, ys1 - y1),
+        "v2": (xs2 - x1, ys2 - y1)
+    }
+    mag1 = math.hypot(vec["v1"][0], vec["v1"][1])
+    mag2 = math.hypot(vec["v2"][0], vec["v2"][1])
+    if mag1 == 0 or mag2 == 0:
+        return 1, 0, 0, 0
+    dot1 = vec["v0"][0] * vec["v1"][0] + vec["v0"][1] * vec["v1"][1]
+    dot2 = vec["v0"][0] * vec["v2"][0] + vec["v0"][1] * vec["v2"][1]
+    cos_theta1 = dot1 / (mag1 * mag2)
+    cos_theta2 = dot2 / (mag1 * mag2)
+    print(cos_theta1, cos_theta2)
+    if cos_theta1 > 0:
+        return 2, round(xs1), round(ys1), dist, time
+    elif cos_theta2 > 0:
+        return 3, round(xs2), round(ys2), dist, time
+    else:
+        return 4, 0, 0, 0
+
+# 同地起飛（指定地點起飛）
+def fmode2(xexact, yexact, xdep, ydep, xtar, ytar, slp, inter, arrivetime, fspd, dist):
+    # 求出發點到跳板的直線以及交點
+    if xdep == xexact == xtar:
+        disttotar = 0
+        xclosest = xdep
+        yclosest = ydep
+
+    else:
+        slp2_raw = (yexact - ydep) / (xexact - xdep)
+        inter2_raw = (yexact - slp2_raw * xexact)
+        slp2 = round(slp2_raw, 5)
+        inter2 = round(inter2_raw, 5)
+
+        slp_dist_raw = (-1 / slp2)
+        inter_dist_raw = (ytar - slp_dist_raw * xtar)
+        slp_dist = round(slp_dist_raw, 5)
+        inter_dist = round(inter_dist_raw, 5)
+
+        xclosest = (inter_dist - inter2) / (slp2 - slp_dist)
+        yclosest = (slp2 * xclosest + inter2)
+
+    # 檢查是否距離超過5jm 如果超過就改為計算出發點最近的交點
+        disttotar = math.sqrt((xtar - xclosest) ** 2 + (ytar - yclosest))
+
+    if disttotar > 5:
+        slp_corr_raw = (-1 / slp)
+        inter_corr_raw = (ydep - slp_corr_raw * xdep)
+        slp_corr = round(slp_corr_raw, 5)
+        inter_corr = round(inter_corr_raw)
+        xcorr = (inter_corr - inter) / (slp - slp_corr)
+        ycorr = slp * xcorr + inter
+        dist = math.sqrt((xcorr - xtar) ** 2 + (ycorr - ytar) ** 2)
+        time = round(dist / (fspd * 0.0001))
+        timeobj = timedelta(seconds=time)
+        estdepobj = arrivetime - timeobj
+
+        if estdepobj.total_seconds() < 0:
+            estdepobj += timedelta(seconds=86400)
+        dist_corr = math.sqrt((xcorr - xdep) ** 2 + (ycorr - ydep) ** 2)
+        timecorr = timedelta(seconds=dist_corr / fspd * 0.0001)
+        round(dist)
+        return 1, xcorr, ycorr, estdepobj, timeobj, timecorr, dist
+
+    else:
+        if xdep == xexact == xtar:
+            dist = abs(ytar - ydep)
+        else:
+            dist = math.sqrt((xtar - xclosest) ** 2 + (ytar - yclosest) ** 2)
+
+        time = round(dist / (fspd * 0.0001))
+        timeobj = timedelta(seconds=time)
+        estdepobj = arrivetime - timeobj
+        if estdepobj.total_seconds() < 0:
+            estdepobj += timedelta(seconds=86400)
+        round(dist)
+        return 2, xclosest, yclosest, estdepobj, timeobj, 0, dist
+
+
+def calculate_airstrike(user_id:int) -> str:
+    xtar = user_data[user_id]["coor_info"]["coor_tar"][0]
+    ytar = user_data[user_id]["coor_info"]["coor_tar"][1]
+    xstp = user_data[user_id]["coor_info"]["coor_step"][0]
+    ystp = user_data[user_id]["coor_info"]["coor_step"][1]
+    step_type = user_data[user_id]["coor_info"]["coor_steptype"][0]
+    fmode == user_data[user_id]["status"]["fmode"][0]
+    if step_type == 1:
+        step_type_o = "哨站"
+    else step_type == 2:
+        step_type_o = "平台"
+
+    xexact, yexact = exactcoor(xtar, ytar, xstp, ystp, step_type)
+
+    lne, slp, inter = get_line_info(xtar, ytar, xexact, yexact)
+    if fmode == "sametime":
+        deptime = user_data[user_id]["sametime_info"]["deptime"][0]
+        arrivetime = user_data[user_id]["sametime_info"]["arrivetime"][0]
+        fspd = user_data[user_id]["sametime_info"]["fspd"][0]
+        status, xs, ys, dist, travel_time = fmode1(deptime, arrivetime, fspd, xstp, ystp, lne, slp, inter, xtar, ytar, xexact, yexact, tolerance=1e-6)
+    elif fmode == "sameplace":
+        arrivetime = user_data[user_id]["sameplace_info"]["arrivetime"][0]
+        fspd = user_data[user_id]["sameplace_info"]["fspd"][0]
+        xdep = user_data[user_id]["sameplace_info"]["coor_dep"][0]
+        ydep = user_data[user_id]["sameplace_info"]["coor_dep"][1]
+        status, xs, ys, estdeptime, esttime, timecorr, dist, travel_time = fmode2(xexact, yexact, xdep, ydep, xtar, ytar, slp, inter, arrivetime, fspd)
+
+    if fmode == "sametime":
+        result_text = (
+            f"📍你的指定空降座標為:({xtar}, {ytar})\n"
+            f"🛸你的指定跳板座標為:({xstp}, {ystp})，類型為:{step_type_o}\n"
+            f"🚀你預定於{deptime.strftime(%H:%M)}出發，經過{dist}JM，並於({arrivetime.strftime(%H:%M)})抵達!"
+            f"📍你應該由({xs}, {ys})出發，共花費{travel_time.strftime(%H:%M)}"
+        )
+        user_data[user_id]["status"]["result"] = result_text
+        return result_text
+
+    elif fmode == "sameplace":
+        if status == 1:
+            result_text = (
+                f"📍你的指定空降座標為:({xtar}, {ytar})\n"
+                f"🛸你的指定跳板座標為:({xstp}, {ystp})，類型為:{step_type_o}\n"
+                f"📏由你的指定出發位置出發會偏離空降目標點超過5JM，我們將幫你計算最近的推薦出發點!"\n
+                f"📍你應該改由({xs}, {ys})出發，從你的指定出發座標出發前往新出發座標共花費({timecorr.strftime(%H:%M)})"\n
+                f"⏰到達建議出發地點後，你應該於({estdeptime.strftime(%H:%M:%S)})出發，經過{dist}JM，花費{travel_time.strftime(%H:%M)}，並在({arrivetime.strftime(%H:%M)})抵達!
+            )
+        elif status == 2:
+            result_text = (
+                f"📍你的指定空降座標為:({xtar}, {ytar})\n"
+                f"🛸你的指定跳板座標為:({xstp}, {ystp})，類型為:{step_type_o}\n"
+                f"🚀你預定由({xdep},{ydep})出發，經過{dist}JM，並於{arrivetime.strftime(%H:%M)}抵達!"
+                f"⏰你應該於({estdeptime.strftime(%H:%M:%S)})出發，經過{dist}JM，花費{travel_time.strftime(%H:%M)}，並在({arrivetime.strftime(%H:%M)})抵達!
+            )
+        user_data[user_id]["status"]["result"] = result_text
+        return result_text
 
 
 
 
 
-
-
-@bot.command()
-async def airstrike(ctx):
+#實際運行
+@tree.command(name="airstrike", description = "執行空降")
+async def airstrike(interaction: discord.Interaction):
     print("calling airstrike")
-    await ctx.send("指揮官，空降行動開始!")
-    coor_info_button = Button(label = "開始輸入座標!", style = discord.ButtonStyle.blurple, custom_id = "coor_info")
-    view = View()
-    view.add_item(coor_info_button)
+    user = interaction.user
+    user_id = interaction.user.id
+    name = user.nick or user.name
 
-    Sametime_button = Button(label = "同時起飛(指定時間)", style = discord.ButtonStyle.blurple, custom_id = "sametime")
-    Sameplace_button = Button(label = "同地起飛(指定座標)", style = discord.ButtonStyle.blurple, custom_id = "sameplace")
+    #全域資料清空
+    user_data[user_id] = {
+        "coor_info": {
+            "coor_tar": [],
+            "coor_step": [],
+            "coor_steptype": []
+        },
+
+        "sametime_info": {
+            "deptime": [],
+            "arrivetime": [],
+            "fspd": []
+        },
+
+        "sameplace_info": {
+            "coor_dep": [],
+            "arrivetime": [],
+            "fspd": []
+        },
+
+        "status":{
+          "coorinfo_done": False,
+          "timeplace_info": False,
+            "fmode": "default",
+            "result": "result"
+        }
+    }
+
+
+    await interaction.response.send_message(f"{name}指揮官，空降行動開始!")
+
+    coor_info_button = Button(label = "開始輸入座標!", style = discord.ButtonStyle.blurple, custom_id = "coor_info")
+    Sametime_button = Button(label = "同時起飛(指定出發時間)", style = discord.ButtonStyle.blurple, custom_id = "sametime")
+    Sameplace_button = Button(label = "同地起飛(指定起點座標)", style = discord.ButtonStyle.blurple, custom_id = "sameplace")
+
+    view1 = View()
+    view1.add_item(coor_info_button)
     view2 = View()
     view2.add_item(Sametime_button)
     view2.add_item(Sameplace_button)
 
-    await ctx.send("指揮官，要空降哪裡呢?", view = view)
-    await ctx.send("請選擇空降方式：", view = view2)
-
-
-
+    await interaction.followup.send("指揮官，要空降哪裡呢?", view = view1, ephemeral = True)
+    await interaction.followup.send("請選擇空降方式：", view = view2, ephemeral = True)
 
 
 
@@ -176,14 +553,24 @@ async def airstrike(ctx):
 async def on_interaction(interaction):
     if interaction.type == discord.InteractionType.component:
         custom_id = interaction.data["custom_id"]
+        user_id = interaction.user.id
 
         if custom_id == "coor_info":
-            await interaction.response.send_modal(GetcoorinfoModal())
+            await interaction.response.send_modal(GetcoorinfoModal(user_id))
+
         elif custom_id == "sametime":
-            await interaction.response.send_modal(SametimeinfoModal())
+            await interaction.response.send_modal(SametimeinfoModal(user_id))
+
         elif custom_id == "sameplace":
-            if interaction.data["custom_id"] == "sameplace":
-                await interaction.response.send_modal(SameplaceinfoModal())
+            await interaction.response.send_modal(SameplaceinfoModal(user_id))
+
+        elif custom_id == "start_calc":
+            await interaction.response.send_message("開始計算中...", ephemeral=True)
+            result_text = calculate_airstrike(user_id)
+            await interaction.followup.send_message(result_text, ephemeral=True)
+
+        #elif custom_id == "create_event"
+
 
 
 
