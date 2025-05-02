@@ -2,7 +2,9 @@ from lib2to3.fixes.fix_metaclass import find_metas
 
 import discord
 from discord.ext import commands
+from discord.ui import Select, Button, View
 import os
+
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -18,24 +20,35 @@ async def on_ready():
 
 @bot.command()
 async def airstrike(ctx):
+    print("calling airstrike")
+    await ctx.send("指揮官，要怎麼出擊呢?")
+
     Sametime_button = Button(label = "同時起飛(指定時間)", style = discord.ButtonStyle.blurple, custom_id = "sametime")
     Sameplace_button = Button(label = "同地起飛(指定座標)", style = discord.ButtonStyle.blurple, custom_id = "sameplace")
 
     view = View()
     view.add_item(Sametime_button)
     view.add_item(Sameplace_button)
+    await ctx.send("請選擇空降方式：", view = view)
 
-    await ctx.send("指揮官，要怎麼出擊呢?")
 
 @bot.event
 async def on_interaction(interaction):
     if interaction.type == discord.InteractionType.component:
         if interaction.data["custom_id"] == "sametime":
-            await bot.load_extension("cogs.sametime")
-            await interaction.response.send_message("載入同時起飛模組0u0b")
+            cog = bot.get_cog("SametimeCog")
+            if cog:
+                await interaction.response.defer()
+                await cog.sametime_action(interaction)
+            #await bot.load_extension("cogs.sametime")
+            #await interaction.response.send_message("載入同時起飛模組0u0b")
         elif interaction.data["custom_id"] == "sameplace":
-            await bot.load_extension("cogs.sameplace")
-            await interaction.response.send_message("<載入同地起飛模組>d0u0")
+            cog = bot.get_cog("SameplaceCog")
+            if cog:
+                await interaction.response.defer()
+                await cog.sameplace_action(interaction)
+            #await bot.load_extension("cogs.sameplace")
+            #await interaction.response.send_message("<載入同地起飛模組>d0u0")
 
 
 if __name__ == "__main__":
