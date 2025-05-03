@@ -177,7 +177,7 @@ class SametimeinfoModal(Modal):
             deptime = datetime.strptime(deptime_str, "%H:%M")
 
             arrivetime_str = self.arrivetime.value
-            arrivetime = datetime.strptime(deptime_str, "%H:%M")
+            arrivetime = datetime.strptime(arrivetime_str, "%H:%M")
 
             fspd = int(self.fspd.value.strip())
 
@@ -565,18 +565,16 @@ async def airstrike(interaction: discord.Interaction):
 
     await interaction.response.send_message(f"{name}指揮官，空降行動開始!")
 
-    coor_info_button = Button(label = "開始輸入座標!", style = discord.ButtonStyle.blurple, custom_id = "coor_info")
-    Sametime_button = Button(label = "同時起飛(指定出發時間)", style = discord.ButtonStyle.blurple, custom_id = "sametime")
-    Sameplace_button = Button(label = "同地起飛(指定起點座標)", style = discord.ButtonStyle.blurple, custom_id = "sameplace")
+    coor_info_button = Button(label = "開始輸入座標!", style = discord.ButtonStyle.blurple, custom_id = "coor_info", row = 0)
+    Sametime_button = Button(label = "同時起飛(指定出發時間)", style = discord.ButtonStyle.blurple, custom_id = "sametime", row = 1)
+    Sameplace_button = Button(label = "同地起飛(指定起點座標)", style = discord.ButtonStyle.blurple, custom_id = "sameplace", row = 1)
 
     view1 = View()
     view1.add_item(coor_info_button)
-    view2 = View()
-    view2.add_item(Sametime_button)
-    view2.add_item(Sameplace_button)
+    view1.add_item(Sametime_button)
+    view1.add_item(Sameplace_button)
 
-    await interaction.followup.send("指揮官，要空降哪裡呢?", view = view1, ephemeral = True)
-    await interaction.followup.send("請選擇空降方式：", view = view2, ephemeral = True)
+    await interaction.followup.send("指揮官，要空降哪裡呢?\n請輸入座標後選擇模式:", view = view1, ephemeral = True)
 
 
 processing_users = set()
@@ -608,8 +606,10 @@ async def on_interaction(interaction):
 
         #elif custom_id == "create_event"
 
+        #elif custom_id == "join_event"
+
 
 
 
 if __name__ == "__main__":
-    bot.run("MTM2Njc3MzQyMzAwMjYxNTg0OA.GKJvaS.tDKpssinX_pPlwsp_aWflcxrzDhQrWQ3K953Ro")
+    bot.run("MTM2Njc3MzQyMzAwMjYxNTg0OA.GVM6ml.lzlVLyZDJ5vKzOM1oPAz0T6Ej3-4V-lKaSuc7E")
