@@ -130,7 +130,7 @@ class GetcoorinfoModal(Modal):
                 view3.add_item(start_button)
                 await interaction.followup.send("資料輸入完成!", view = view3, ephmeral = True)
             else:
-                interaction.followup.send("請繼續填寫同時/同地起飛資訊!", ephemeral = True)
+                await interaction.followup.send("請繼續填寫同時/同地起飛資訊!", ephemeral = True)
 
         except Exception as e:
             await interaction.response.send_message(
@@ -199,7 +199,7 @@ class SametimeinfoModal(Modal):
                 start_button = Button(label = "開始計算", style = discord.ButtonStyle.green, custom_id = "start_calc")
                 view3 = View()
                 view3.add_item(start_button)
-                await interaction.followup.send("資料輸入完成!", view = view3, ephmeral = True)
+                await interaction.followup.send("資料輸入完成!", view = view3, ephemeral = True)
             else:
                 interaction.followup.send("請繼續填寫座標資訊!", ephemeral = True)
 
@@ -351,7 +351,7 @@ def get_line_info(xtar, ytar, xexact, yexact):
         return 2, m, b
 
 #計算同時起飛
-def fmode1(deptime, arrivetime, fspd, xstp, ystp, lne, slp, inter, x1, y1, xexact, yexact, tolerance=1e-6):
+def fmode1(deptime, arrivetime, fspd, xstp, ystp, lne, slp, inter, xtar, ytar, xexact, yexact, tolerance=1e-6):
     time = arrivetime - deptime
     if time.total_seconds() < 0:
         time += timedelta(seconds=86400)
@@ -367,6 +367,7 @@ def fmode1(deptime, arrivetime, fspd, xstp, ystp, lne, slp, inter, x1, y1, xexac
         B = 2 * (slp * (inter - ystp) - xstp)
         C = (inter - ystp) ** 2 + xstp ** 2 - dist ** 2
         discriminant = B ** 2 - 4 * A * C
+        print(discriminant)
         sqrt_D = math.sqrt(discriminant)
         xs1 = (-B + sqrt_D) / (2 * A)
         xs2 = (-B - sqrt_D) / (2 * A)
@@ -376,9 +377,9 @@ def fmode1(deptime, arrivetime, fspd, xstp, ystp, lne, slp, inter, x1, y1, xexac
         # print(dist, time.total_seconds(),xexact, yexact, xs1, ys1, xs2, ys2)
     # 得到兩個座標 用向量求何者為同向
     vec = {
-        "v0": (x1 - xexact, y1 - yexact),
-        "v1": (xs1 - x1, ys1 - y1),
-        "v2": (xs2 - x1, ys2 - y1)
+        "v0": (xtar - xexact, ytar - yexact),
+        "v1": (xs1 - xtar, ys1 - ytar),
+        "v2": (xs2 - xtar, ys2 - ytar)
     }
     mag1 = math.hypot(vec["v1"][0], vec["v1"][1])
     mag2 = math.hypot(vec["v2"][0], vec["v2"][1])
@@ -419,7 +420,7 @@ def fmode2(xexact, yexact, xdep, ydep, xtar, ytar, slp, inter, arrivetime, fspd)
         yclosest = (slp2 * xclosest + inter2)
 
     # 檢查是否距離超過5jm 如果超過就改為計算出發點最近的交點
-        disttotar = math.sqrt((xtar - xclosest) ** 2 + (ytar - yclosest))
+        disttotar = math.sqrt((xtar - xclosest) ** 2 + (ytar - yclosest) ** 2)
 
     if disttotar > 5:
         slp_corr_raw = (-1 / slp)
@@ -428,7 +429,7 @@ def fmode2(xexact, yexact, xdep, ydep, xtar, ytar, slp, inter, arrivetime, fspd)
         inter_corr = round(inter_corr_raw)
         xcorr = (inter_corr - inter) / (slp - slp_corr)
         ycorr = slp * xcorr + inter
-        dist = math.sqrt((xcorr - xtar) ** 2 + (ycorr - ytar) ** 2)
+        dist = math.sqrt((xcorr - xdep) ** 2 + (ycorr - ydep) ** 2)
         time = round(dist / (fspd * 0.0001))
         timeobj = timedelta(seconds=time)
         estdepobj = arrivetime - timeobj
@@ -444,7 +445,7 @@ def fmode2(xexact, yexact, xdep, ydep, xtar, ytar, slp, inter, arrivetime, fspd)
         if xdep == xexact == xtar:
             dist = abs(ytar - ydep)
         else:
-            dist = math.sqrt((xtar - xclosest) ** 2 + (ytar - yclosest) ** 2)
+            dist = math.sqrt((xtar - xdep) ** 2 + (ytar - ydep) ** 2)
 
         time = round(dist / (fspd * 0.0001))
         timeobj = timedelta(seconds=time)
@@ -476,6 +477,7 @@ def calculate_airstrike(user_id:int) -> str:
         deptime = user_data[user_id]["sametime_info"]["deptime"][0]
         arrivetime = user_data[user_id]["sametime_info"]["arrivetime"][0]
         fspd = user_data[user_id]["sametime_info"]["fspd"]
+        print(deptime, arrivetime, fspd, xstp, ystp, lne, slp, inter, xtar, ytar, xexact, yexact)
         status, xs, ys, dist, travel_time = fmode1(deptime, arrivetime, fspd, xstp, ystp, lne, slp, inter, xtar, ytar, xexact, yexact, tolerance=1e-6)
         travel_time_formatted = deltaformatted(travel_time)
     elif fmode == "sameplace":
@@ -577,7 +579,7 @@ async def airstrike(interaction: discord.Interaction):
     await interaction.followup.send("請選擇空降方式：", view = view2, ephemeral = True)
 
 
-
+processing_users = set()
 
 @bot.event
 async def on_interaction(interaction):
@@ -595,9 +597,14 @@ async def on_interaction(interaction):
             await interaction.response.send_modal(SameplaceinfoModal(user_id))
 
         elif custom_id == "start_calc":
-            await interaction.response.send_message("開始計算中...", ephemeral=True)
+            if user_id in processing_users:
+                await interaction.response.send_message("資訊計算中，指揮官請稍候......", ephemeral = True)
+
+            processing_users.add(user_id)
+            await interaction.response.defer(ephemeral=True)
             result_text = calculate_airstrike(user_id)
             await interaction.followup.send(result_text, ephemeral=True)
+            processing_users.remove(user_id)
 
         #elif custom_id == "create_event"
 
