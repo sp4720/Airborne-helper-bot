@@ -1,3 +1,4 @@
+from cgi import print_form
 from lib2to3.fixes.fix_metaclass import find_metas
 from operator import truediv
 
@@ -18,26 +19,29 @@ tree = bot.tree
 #全域資料儲存
 user_data = {
     "coor_info": {
-        "coor_tar":[],
-        "coor_step":[],
-        "coor_steptype":[]
+        "coor_tar_x":0,
+        "coor_tar_y":0,
+        "coor_step_x":0,
+        "coor_step_y":0,
+        "coor_steptype":0
     },
 
     "sametime_info": {
         "deptime":[],
         "arrivetime":[],
-        "fspd":[]
+        "fspd":0
     },
 
     "sameplace_info": {
-        "coor_dep":[],
+        "coor_dep_x":0,
+        "coor_dep_y":0,
         "arrivetime":[],
-        "fspd":[]
+        "fspd":0
     },
 
     "status":{
-        "coorinfo_done": False,
-        "timeplace_info": False,
+        "coor_info_done": False,
+        "timeplace_info_done": False,
         "fmode": "default",
         "result": "result"
     }
@@ -105,10 +109,12 @@ class GetcoorinfoModal(Modal):
             else:
                 step_type_str = "你應該輸入錯囉"
 
-            user_data[user_id]["coor_info"]["coor_tar"].append((xtar, ytar))
-            user_data[user_id]["coor_info"]["coor_step"].append((xstp, ystp))
-            user_data[user_id]["coor_info"]["coor_steptype"].append(step_type)
-            user_data[user_id]["status"]["coorinfo_done"] = True
+            user_data[user_id]["coor_info"]["coor_tar_x"] = xtar
+            user_data[user_id]["coor_info"]["coor_tar_y"] = ytar
+            user_data[user_id]["coor_info"]["coor_step_x"] = xstp
+            user_data[user_id]["coor_info"]["coor_step_y"] = ystp
+            user_data[user_id]["coor_info"]["coor_steptype"] = step_type
+            user_data[user_id]["status"]["coor_info_done"] = True
 
             await interaction.response.send_message(
                 f"座標獲取成功!"
@@ -118,13 +124,13 @@ class GetcoorinfoModal(Modal):
                 ephemeral = True
             )
             #雙表單完成檢查
-            if user_data[user_id]["status"]["coorinfo_done"] and (user_data[user_id]["status"]["timeplace_info_done"]):
+            if user_data[user_id]["status"]["coor_info_done"] and (user_data[user_id]["status"]["timeplace_info_done"]):
                 start_button = Button(label = "開始計算", style = discord.ButtonStyle.green, custom_id = "start_calc")
                 view3 = View()
                 view3.add_item(start_button)
-                await interaction.followup.send_message("資料輸入完成!", view = view3, ephmeral = True)
+                await interaction.followup.send("資料輸入完成!", view = view3, ephmeral = True)
             else:
-                interaction.followup.send_message("請繼續填寫同時/同地起飛資訊!", ephemeral = True)
+                interaction.followup.send("請繼續填寫同時/同地起飛資訊!", ephemeral = True)
 
         except Exception as e:
             await interaction.response.send_message(
@@ -135,7 +141,8 @@ class GetcoorinfoModal(Modal):
 
 #同時出發所需資訊表單
 class SametimeinfoModal(Modal):
-    def __init__(self):
+    def __init__(self, used_id):
+        self.user_id = used_id
         super().__init__(title = "請輸入出發時間、到達時間以及曲率航速：")
         self.deptime = TextInput(
             label = "請輸入預計出發的時間(24小時制):",
@@ -176,25 +183,25 @@ class SametimeinfoModal(Modal):
 
             user_data[user_id]["sametime_info"]["deptime"].append(deptime)
             user_data[user_id]["sametime_info"]["arrivetime"].append(arrivetime)
-            user_data[user_id]["sametime_info"]["fspd"].append(fspd)
-            user_data[user_id]["status"]["timeplaceinfo_done"] = True
+            user_data[user_id]["sametime_info"]["fspd"] = fspd
+            user_data[user_id]["status"]["timeplace_info_done"] = True
             user_data[user_id]["status"]["fmode"] = "sametime"
 
             await interaction.response.send_message(
                 f"資訊獲取獲取成功!\n"
-                f"預計出發時間為:({deptime.strftime(%H:%M)})\n"
-                f"抵達目標時間為:({arrivetime.strftime(%H:%M)})\n"
+                f"預計出發時間為:({deptime.strftime("%H:%M")})\n"
+                f"抵達目標時間為:({arrivetime.strftime("%H:%M")})\n"
                 f"艦隊曲率航速為:{fspd}",
                 ephemeral=True
             )
             #雙表單完成檢查
-            if user_data[user_id]["status"]["coorinfo_done"] and (user_data[user_id]["status"]["timeplace_info_done"]):
+            if user_data[user_id]["status"]["coor_info_done"] and (user_data[user_id]["status"]["timeplace_info_done"]):
                 start_button = Button(label = "開始計算", style = discord.ButtonStyle.green, custom_id = "start_calc")
                 view3 = View()
                 view3.add_item(start_button)
-                await interaction.followup.send_message("資料輸入完成!", view = view3, ephmeral = True)
+                await interaction.followup.send("資料輸入完成!", view = view3, ephmeral = True)
             else:
-                interaction.followup.send_message("請繼續填寫座標資訊!", ephemeral = True)
+                interaction.followup.send("請繼續填寫座標資訊!", ephemeral = True)
 
         except Exception as e:
             await interaction.response.send_message(
@@ -204,7 +211,8 @@ class SametimeinfoModal(Modal):
 
 #同地出發資訊表單
 class SameplaceinfoModal(Modal):
-    def __init__(self):
+    def __init__(self, user_id):
+        self.user_id = user_id
         super().__init__(title = "請輸入出發地點、到達時間以及曲率航速：")
         self.coor_dep = TextInput(
             label = "請輸入預計出發的地點:",
@@ -234,42 +242,55 @@ class SameplaceinfoModal(Modal):
     async def on_submit(self, interaction: discord.Interaction):
         try:
             user_id = interaction.user.id
-            xcoor_dep_str, ycoor_dep_str = re.split(r"[,\s]+", self.coor_target.value)
+            xcoor_dep_str, ycoor_dep_str = re.split(r"[,\s]+", self.coor_dep.value)
             xdep = int(xcoor_dep_str.strip())
             ydep = int(ycoor_dep_str.strip())
 
             arrivetime_str = self.arrivetime.value
-            arrivetime = datetime.strptime(deptime_str, "%H:%M")
+            arrivetime = datetime.strptime(arrivetime_str, "%H:%M")
 
             fspd = int(self.fspd.value.strip())
 
-            user_data[user_id]["sameplace_info"]["coor_dep"].append(xdep, ydep)
+            user_data[user_id]["sameplace_info"]["coor_dep_x"] = xdep
+            user_data[user_id]["sameplace_info"]["coor_dep_y"] = ydep
             user_data[user_id]["sameplace_info"]["arrivetime"].append(arrivetime)
-            user_data[user_id]["sameplace_info"]["fspd"].append(fspd)
-            user_data[user_id]["status"]["timeplaceinfo_done"] = True
+            user_data[user_id]["sameplace_info"]["fspd"] = fspd
+            user_data[user_id]["status"]["timeplace_info_done"] = True
             user_data[user_id]["status"]["fmode"] = "sameplace"
 
             await interaction.response.send_message(
                 f"資訊獲取獲取成功!"
                 f"預計出發座標為:({xdep}, {ydep})\n"
-                f"出發時間為:({arrivetime.strftime(%H:%M)})\n"
+                f"出發時間為:({arrivetime.strftime("%H:%M")})\n"
                 f"艦隊曲率航速為:{fspd}",
                 ephemeral=True
             )
             #雙表單完成檢查
-            if user_data[user_id]["status"]["coorinfo_done"] and (user_date[user_id]["status"]["timeplace_info_done"]):
+            if user_data[user_id]["status"]["coor_info_done"] and (user_data[user_id]["status"]["timeplace_info_done"]):
                 start_button = Button(label = "開始計算", style = discord.ButtonStyle.green, custom_id = "start_calc")
                 view3 = View()
                 view3.add_item(start_button)
-                await interaction.followup.send_message("資料輸入完成!", view = view3, ephmeral = True)
+                await interaction.followup.send("資料輸入完成!", view = view3, ephemeral = True)
             else:
-                interaction.followup.send_message("請繼續填寫座標資訊!", ephemeral = True)
+                interaction.followup.send("請繼續填寫座標資訊!", ephemeral = True)
 
         except Exception as e:
             await interaction.response.send_message(
                 f"資料格式錯誤，請確認時間格式為HH:MM(英文逗號)，航速為整數。\n錯誤訊息:{str(e)}",
                 ephemeral=True
             )
+
+#時間轉換
+def deltaformatted(tdelta):
+    total_seconds = int(tdelta.total_seconds())
+    hours = total_seconds //3600
+    minutes = (total_seconds % 3600) // 60
+    seconds = total_seconds % 60
+
+    formatted = f"{hours:02}:{minutes:02}:{seconds:02}"
+    return formatted
+
+
 
 
 #計算過程
@@ -376,7 +397,7 @@ def fmode1(deptime, arrivetime, fspd, xstp, ystp, lne, slp, inter, x1, y1, xexac
         return 4, 0, 0, 0
 
 # 同地起飛（指定地點起飛）
-def fmode2(xexact, yexact, xdep, ydep, xtar, ytar, slp, inter, arrivetime, fspd, dist):
+def fmode2(xexact, yexact, xdep, ydep, xtar, ytar, slp, inter, arrivetime, fspd):
     # 求出發點到跳板的直線以及交點
     if xdep == xexact == xtar:
         disttotar = 0
@@ -412,7 +433,7 @@ def fmode2(xexact, yexact, xdep, ydep, xtar, ytar, slp, inter, arrivetime, fspd,
         timeobj = timedelta(seconds=time)
         estdepobj = arrivetime - timeobj
 
-        if estdepobj.total_seconds() < 0:
+        if estdepobj.day != arrivetime.day:
             estdepobj += timedelta(seconds=86400)
         dist_corr = math.sqrt((xcorr - xdep) ** 2 + (ycorr - ydep) ** 2)
         timecorr = timedelta(seconds=dist_corr / fspd * 0.0001)
@@ -428,22 +449,24 @@ def fmode2(xexact, yexact, xdep, ydep, xtar, ytar, slp, inter, arrivetime, fspd,
         time = round(dist / (fspd * 0.0001))
         timeobj = timedelta(seconds=time)
         estdepobj = arrivetime - timeobj
-        if estdepobj.total_seconds() < 0:
+        if estdepobj.day != arrivetime.day:
             estdepobj += timedelta(seconds=86400)
         round(dist)
-        return 2, xclosest, yclosest, estdepobj, timeobj, 0, dist
+        nocorr = timedelta(hours = 0, minutes = 0, seconds = 0)
+        return 2, xdep, ydep, estdepobj, timeobj, nocorr, dist
 
 
 def calculate_airstrike(user_id:int) -> str:
-    xtar = user_data[user_id]["coor_info"]["coor_tar"][0]
-    ytar = user_data[user_id]["coor_info"]["coor_tar"][1]
-    xstp = user_data[user_id]["coor_info"]["coor_step"][0]
-    ystp = user_data[user_id]["coor_info"]["coor_step"][1]
-    step_type = user_data[user_id]["coor_info"]["coor_steptype"][0]
-    fmode == user_data[user_id]["status"]["fmode"][0]
+    xtar = user_data[user_id]["coor_info"]["coor_tar_x"]
+    ytar = user_data[user_id]["coor_info"]["coor_tar_y"]
+    xstp = user_data[user_id]["coor_info"]["coor_step_x"]
+    ystp = user_data[user_id]["coor_info"]["coor_step_y"]
+    step_type = user_data[user_id]["coor_info"]["coor_steptype"]
+    fmode = user_data[user_id]["status"]["fmode"]
+    #print(f"{xtar} {ytar} {xstp} {ystp} {step_type} {fmode}")
     if step_type == 1:
         step_type_o = "哨站"
-    else step_type == 2:
+    elif step_type == 2:
         step_type_o = "平台"
 
     xexact, yexact = exactcoor(xtar, ytar, xstp, ystp, step_type)
@@ -452,21 +475,24 @@ def calculate_airstrike(user_id:int) -> str:
     if fmode == "sametime":
         deptime = user_data[user_id]["sametime_info"]["deptime"][0]
         arrivetime = user_data[user_id]["sametime_info"]["arrivetime"][0]
-        fspd = user_data[user_id]["sametime_info"]["fspd"][0]
+        fspd = user_data[user_id]["sametime_info"]["fspd"]
         status, xs, ys, dist, travel_time = fmode1(deptime, arrivetime, fspd, xstp, ystp, lne, slp, inter, xtar, ytar, xexact, yexact, tolerance=1e-6)
+        travel_time_formatted = deltaformatted(travel_time)
     elif fmode == "sameplace":
         arrivetime = user_data[user_id]["sameplace_info"]["arrivetime"][0]
-        fspd = user_data[user_id]["sameplace_info"]["fspd"][0]
-        xdep = user_data[user_id]["sameplace_info"]["coor_dep"][0]
-        ydep = user_data[user_id]["sameplace_info"]["coor_dep"][1]
-        status, xs, ys, estdeptime, esttime, timecorr, dist, travel_time = fmode2(xexact, yexact, xdep, ydep, xtar, ytar, slp, inter, arrivetime, fspd)
+        fspd = user_data[user_id]["sameplace_info"]["fspd"]
+        xdep = user_data[user_id]["sameplace_info"]["coor_dep_x"]
+        ydep = user_data[user_id]["sameplace_info"]["coor_dep_y"]
+        status, xs, ys, estdeptime, esttime, timecorr, dist = fmode2(xexact, yexact, xdep, ydep, xtar, ytar, slp, inter, arrivetime, fspd)
+        esttime_formatted = deltaformatted(esttime)
+        timecorr_formatted = deltaformatted(timecorr)
 
     if fmode == "sametime":
         result_text = (
             f"📍你的指定空降座標為:({xtar}, {ytar})\n"
             f"🛸你的指定跳板座標為:({xstp}, {ystp})，類型為:{step_type_o}\n"
-            f"🚀你預定於{deptime.strftime(%H:%M)}出發，經過{dist}JM，並於({arrivetime.strftime(%H:%M)})抵達!"
-            f"📍你應該由({xs}, {ys})出發，共花費{travel_time.strftime(%H:%M)}"
+            f"🚀你預定於{deptime.strftime("%H:%M")}出發，經過{dist}JM，並於({arrivetime.strftime("%H:%M")})抵達!\n"
+            f"📍你應該由({xs}, {ys})出發，共花費{travel_time_formatted}\n"
         )
         user_data[user_id]["status"]["result"] = result_text
         return result_text
@@ -476,16 +502,17 @@ def calculate_airstrike(user_id:int) -> str:
             result_text = (
                 f"📍你的指定空降座標為:({xtar}, {ytar})\n"
                 f"🛸你的指定跳板座標為:({xstp}, {ystp})，類型為:{step_type_o}\n"
-                f"📏由你的指定出發位置出發會偏離空降目標點超過5JM，我們將幫你計算最近的推薦出發點!"\n
-                f"📍你應該改由({xs}, {ys})出發，從你的指定出發座標出發前往新出發座標共花費({timecorr.strftime(%H:%M)})"\n
-                f"⏰到達建議出發地點後，你應該於({estdeptime.strftime(%H:%M:%S)})出發，經過{dist}JM，花費{travel_time.strftime(%H:%M)}，並在({arrivetime.strftime(%H:%M)})抵達!
+                f"📏由你的指定出發位置出發會偏離空降目標點超過5JM，我們將幫你計算最近的推薦出發點!\n"
+                f"📍你應該改由({xs}, {ys})出發，從你的指定出發座標出發前往新出發座標共花費({timecorr_formatted})\n"
+                f"⏰到達建議出發地點後，你應該於({estdeptime.strftime("%H:%M:%S")})出發，經過{dist}JM\n"
+                f"⏰花費{esttime_formatted}，並在({arrivetime.strftime('%H:%M')})抵達!"
             )
         elif status == 2:
             result_text = (
                 f"📍你的指定空降座標為:({xtar}, {ytar})\n"
                 f"🛸你的指定跳板座標為:({xstp}, {ystp})，類型為:{step_type_o}\n"
-                f"🚀你預定由({xdep},{ydep})出發，經過{dist}JM，並於{arrivetime.strftime(%H:%M)}抵達!"
-                f"⏰你應該於({estdeptime.strftime(%H:%M:%S)})出發，經過{dist}JM，花費{travel_time.strftime(%H:%M)}，並在({arrivetime.strftime(%H:%M)})抵達!
+                f"⏰你應該於({estdeptime.strftime("%H:%M:%S")})由({xdep},{ydep})出發，經過{dist}JM\n"
+                f"⏱花費{esttime_formatted}，並在({arrivetime.strftime('%H:%M')})抵達!"
             )
         user_data[user_id]["status"]["result"] = result_text
         return result_text
@@ -505,26 +532,29 @@ async def airstrike(interaction: discord.Interaction):
     #全域資料清空
     user_data[user_id] = {
         "coor_info": {
-            "coor_tar": [],
-            "coor_step": [],
-            "coor_steptype": []
+            "coor_tar_x": 0,
+            "coor_tar_y": 0,
+            "coor_step_x": 0,
+            "coor_step_y": 0,
+            "coor_steptype": 0
         },
 
         "sametime_info": {
             "deptime": [],
             "arrivetime": [],
-            "fspd": []
+            "fspd": 0
         },
 
         "sameplace_info": {
-            "coor_dep": [],
+            "coor_dep_x": 0,
+            "coor_dep_y": 0,
             "arrivetime": [],
-            "fspd": []
+            "fspd": 0
         },
 
         "status":{
-          "coorinfo_done": False,
-          "timeplace_info": False,
+          "coor_info_done": False,
+          "timeplace_info_done": False,
             "fmode": "default",
             "result": "result"
         }
@@ -567,7 +597,7 @@ async def on_interaction(interaction):
         elif custom_id == "start_calc":
             await interaction.response.send_message("開始計算中...", ephemeral=True)
             result_text = calculate_airstrike(user_id)
-            await interaction.followup.send_message(result_text, ephemeral=True)
+            await interaction.followup.send(result_text, ephemeral=True)
 
         #elif custom_id == "create_event"
 
