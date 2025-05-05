@@ -615,7 +615,7 @@ def calculate_airstrike(user_id:int) -> str:
         result_text = (
             f"📍你的指定空降座標為:({xtar}, {ytar})\n"
             f"🛸你的指定跳板座標為:({xstp}, {ystp})，類型為:{step_type_o}\n"
-            f"🚀你預定於{deptime.strftime("%H:%M")}出發，經過{dist}JM，並於({arrivetime.strftime("%H:%M")})抵達!\n"
+            f"🚀你預定於{deptime.strftime("%H:%M")}出發，經過{dist}JM，並於{arrivetime.strftime("%H:%M")}抵達!\n"
             f"📍你應該由({xs}, {ys})出發，共花費{travel_time_formatted}\n"
         )
         user_data[user_id]["status"]["result"] = result_text
@@ -790,7 +790,7 @@ async def joinairstrike(interaction: discord.Interaction):
             if dep_time_match:
                 deptime_str = dep_time_match.group(1)
                 local_dep_time = datetime.combine(date.today(), datetime.strptime(deptime_str, "%H:%M").time())
-                utc_dep_time = local_dep_time.astimezone(timezone.utc)
+                utc_dep_time = local_dep_time.astimezone(timezone(timedelta(hours = 8)))
 
         elif fmode == 2:
             dep_place_match = re.search(r"出發地點為:\((\d+),\s*(\d+)\)", desc)
@@ -801,9 +801,8 @@ async def joinairstrike(interaction: discord.Interaction):
         arrive_time_match = re.search(r"空降抵達時間:(\d{2}:\d{2})", desc)
         if arrive_time_match:
             arrivetime_str = arrive_time_match.group(1)
-            local_arrive_time = datetime.combine(date.today(),
-                                                 datetime.strptime(arrivetime_str, "%H:%M").time())
-            utc_arrive_time = local_arrive_time.astimezone(timezone.utc)
+            local_arrive_time = datetime.combine(date.today(), datetime.strptime(arrivetime_str, "%H:%M").time())
+            utc_arrive_time = local_arrive_time.astimezone(timezone(timedelta(hours = 8)))
 
         #print(f"{xtar} {ytar} {xstp} {ystp} {stp_type} {fmode}")
 
@@ -822,8 +821,8 @@ async def joinairstrike(interaction: discord.Interaction):
         print("tag001")
 
         if fmode == 1:
-            user_data[user_id]["sametime_info"]["deptime"][0].append(utc_dep_time)
-            user_data[user_id]["sametime_info"]["arrivetime"][0].append(utc_arrive_time)
+            user_data[user_id]["sametime_info"]["deptime"].append(utc_dep_time)
+            user_data[user_id]["sametime_info"]["arrivetime"].append(utc_arrive_time)
 
         elif fmode == 2:
             user_data[user_id]["sameplace_info"]["arrivetime"].append(utc_arrive_time)
