@@ -680,7 +680,7 @@ async def create_event(interaction: discord.Interaction):
 
     if fmode == "sametime":
         f_assigned = user_data[user_id]["sametime_info"]["deptime"][0]
-        f_assigned_str = f"出發時間為:{datetime.strptime(f_assigned, '%H:%M').strftime('%H:%M')})"
+        f_assigned_str = f"出發時間為:{f_assigned.strftime('%H:%M')})"
     elif fmode == "sameplace":
         f_assigned_x = user_data[user_id]["sameplace_info"]["coor_dep_x"]
         f_assigned_y = user_data[user_id]["sameplace_info"]["coor_dep_y"]
