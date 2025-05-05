@@ -55,7 +55,7 @@ def main():
     latest_version, download_url = get_latest_release_info()
 
     if not latest_version:
-        print("無法取得最新版本資訊，掠過更新。")
+        print("無法取得最新版本資訊，略過更新。")
     elif local_version == latest_version:
         print(f"當前為最新版本{local_version}，無須更新。")
     else:
