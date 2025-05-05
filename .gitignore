@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+
+# 隱藏 .env 檔案
+*.env
+
+# IDE 設定檔
+.vscode/
+.idea/
+
+# OS 特定檔案
+.DS_Store   # macOS 系統生成的隱藏檔案
+Thumbs.db   # Windows 系統生成的縮圖資料庫檔案
