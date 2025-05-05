@@ -606,6 +606,8 @@ def calculate_airstrike(user_id:int) -> str:
         xdep = user_data[user_id]["sameplace_info"]["coor_dep_x"]
         ydep = user_data[user_id]["sameplace_info"]["coor_dep_y"]
         status, xs, ys, estdeptime, esttime, timecorr, dist = fmode2(xexact, yexact, xdep, ydep, xtar, ytar, slp, inter, arrivetime, fspd)
+        user_data[user_id]["sameplace_info"]["coor_dep_x"] = xs
+        user_data[user_id]["sameplace_info"]["coor_dep_y"] = ys
         esttime_formatted = deltaformatted(esttime)
         timecorr_formatted = deltaformatted(timecorr)
 
